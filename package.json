@@ -1,0 +1,21 @@
+{
+  "name": "ewt-2307-maker",
+  "productName": "2307 Ledger",
+  "version": "1.0.0",
+  "description": "BIR Form 2307 maker and withholding tax report",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "ph.local.ledger2307",
+    "productName": "2307 Ledger",
+    "files": ["main.js", "src/**/*"],
+    "win": { "target": "nsis" }
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}
