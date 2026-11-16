@@ -106,10 +106,11 @@ function vEnt(k){const sp=SPEC[k],rows=live(db[k]).filter(x=>k==='payors'||!E.fp
  main.innerHTML=`<h2>${k==='payors'?'Payors':'Payees'}</h2><div class="box"><div class="g">${sp.map(fld).join('')}</div>
  <button class="b" onclick="saveEnt('${k}')">${E.d?.id?'Update':'Save'} ${k==='payors'?'payor':'payee'}</button><button class="x" onclick="E={};vEnt('${k}')">Clear</button></div>
  ${k==='payees'?`<div class="box"><label>Show payees of</label><select onchange="E.fp=this.value;vEnt('payees')"><option value="">All payors</option>${live(db.payors).map(p=>`<option value="${p.id}" ${E.fp===p.id?'selected':''}>${esc(pl(p))}</option>`).join('')}</select></div>`:''}
- <table class="t"><tr><th>Name</th><th>TIN</th><th>${k==='payors'?'Signatory':'Payor / VAT'}</th><th></th></tr>${rows.map(x=>`<tr><td>${k==='payors'?esc(pl(x)):esc(x.name)}</td><td>${esc(x.tin)}</td><td>${k==='payors'?esc(x.sigName):esc(pl(by('payors',x.payorId)))+' / '+(x.vat==='no'?'Non-VAT':'VAT')}</td>
- <td class="r"><a class="l" onclick="E.d=by('${k}','${x.id}');vEnt('${k}')">Edit</a><a class="l" onclick="delEnt('${k}','${x.id}')">Delete</a></td></tr>`).join('')||'<tr><td colspan=4 class="muted">Nothing saved yet. Fill in the form above and save.</td></tr>'}</table>`}
-function saveEnt(k){const o=E.d?.id?E.d:{id:uid()};SPEC[k].forEach(([f])=>o[f]=$('#e_'+f)?.value.trim()||'');
+ ${k==='payors'?dupBox():''}<table class="t"><tr><th>Name</th><th>TIN</th><th>${k==='payors'?'Signatory':'Payor / VAT'}</th><th></th></tr>${rows.map(x=>`<tr><td>${k==='payors'?esc(pl(x)):esc(x.name)}</td><td>${esc(x.tin)}</td><td>${k==='payors'?esc(x.sigName):esc(pl(by('payors',x.payorId)))+' / '+(x.vat==='no'?'Non-VAT':'VAT')}</td>
+ <td class="r"><a class="l" onclick="E.d=by('${k}','${x.id}');vEnt('${k}')">Edit</a>${k==='payors'?`<a class="l" onclick="mergeUI('${x.id}')">Merge…</a>`:''}<a class="l" onclick="delEnt('${k}','${x.id}')">Delete</a></td></tr>`).join('')||'<tr><td colspan=4 class="muted">Nothing saved yet. Fill in the form above and save.</td></tr>'}</table>`}
+async function saveEnt(k){const o=E.d?.id?E.d:{id:uid()};SPEC[k].forEach(([f])=>o[f]=$('#e_'+f)?.value.trim()||'');
  if(!o.name)return note('Enter the registered name.');if(k==='payees'&&!o.payorId)return note('Add a payor first.');
+ if(!by(k,o.id)&&ntin(o.tin).length>=9){const d=live(db[k]).find(x=>ntin(x.tin)===ntin(o.tin)&&(k==='payors'||x.payorId===o.payorId));if(d&&!await ask(`A ${k==='payors'?'payor':'payee'} with this TIN already exists ("${k==='payors'?pl(d):d.name}"). Save this as a separate record anyway?`))return}
  o.updated=Date.now();if(!db[k].includes(o)&&!by(k,o.id))db[k].push(o);save();E={fp:E.fp};vEnt(k)}
 async function delEnt(k,id){if(!await ask('Delete this record?'))return;const o=by(k,id);o.deleted=true;o.updated=Date.now();save();vEnt(k)}
 /* ---------- Certificates ---------- */
@@ -189,7 +190,7 @@ let RP={};
 function vReport(){const d=new Date(),y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0');if(!live(db.payors).some(x=>x.id===RP.payor))RP.payor=live(db.payors)[0]?.id||'';RP.from=RP.from||`${y}-${m}-01`;RP.to=RP.to||eom(`${y}-${m}-01`);
  main.innerHTML=`<h2>Withholding Tax Report</h2><div class="box"><div class="g"><div><label>Payor</label><select onchange="RP.payor=this.value;RP.pid='';vReport()">${live(db.payors).map(p=>`<option value="${p.id}" ${p.id===RP.payor?'selected':''}>${esc(pl(p))}</option>`).join('')}</select></div>
  <div><label>From</label><input type="date" value="${RP.from}" onchange="RP.from=this.value;vReport()"></div><div><label>To</label><input type="date" value="${RP.to}" onchange="RP.to=this.value;vReport()"></div></div>
- <div style="margin-top:12px"><label>Search payee (name or TIN)</label><input id="rq" value="${esc(RP.q||'')}" oninput="RP.q=this.value;repRefresh()" placeholder="e.g. CITYMALL"></div><button class="b" onclick="printReport()">Print / save as PDF</button><button class="x" onclick="csv()">Export to Excel (CSV)</button></div><div class="box" id="rep">${repHtml()}</div><div class="box"><h3 style="margin-top:0">Certificates included in this report</h3><div id="chip">${chipHtml()}</div><div id="cert">${certHtml()}</div></div>`}
+ <div style="margin-top:12px"><label>Search payee (name or TIN)</label><input id="rq" value="${esc(RP.q||'')}" list="rql" autocomplete="off" oninput="RP.q=this.value;repRefresh()" placeholder="Type, or click to pick from the list"><datalist id="rql">${live(db.payees).filter(x=>x.payorId===RP.payor).sort((a,b)=>a.name.localeCompare(b.name)).map(x=>`<option value="${esc(x.name)}" label="${esc(x.tin)}"></option>`).join('')}</datalist></div><button class="b" onclick="printReport()">Print / save as PDF</button><button class="x" onclick="csv()">Export to Excel (CSV)</button></div><div class="box" id="rep">${repHtml()}</div><div class="box"><h3 style="margin-top:0">Certificates included in this report</h3><div id="chip">${chipHtml()}</div><div id="cert">${certHtml()}</div></div>`}
 function repData(){const P={},M={};live(db.forms).filter(f=>f.payorId===RP.payor&&fOk(f)).forEach(f=>{const pe=by('payees',f.payeeId);f.lines.forEach(l=>{if(l.date<RP.from||l.date>RP.to)return;const c=calc(l,pe);if(!c.a)return;
  const p=P[f.payeeId]=P[f.payeeId]||{id:f.payeeId,name:pe?.name||'?',tin:pe?.tin||'',net:0,tax:0},k=l.date.slice(0,7),m=M[k]=M[k]||{net:0,tax:0};p.net+=c.net;p.tax+=c.tax;m.net+=c.net;m.tax+=c.tax})});return{P:Object.values(P).sort((a,b)=>a.name.localeCompare(b.name)),M}}
 function repHtml(){const{P,M}=repData(),pr=by('payors',RP.payor);const tn=P.reduce((s,x)=>s+x.net,0),tt=P.reduce((s,x)=>s+x.tax,0);
@@ -217,7 +218,7 @@ function exp(onlyNew){const last=+localStorage.getItem('ewt_last')||0,o={};['pay
 function imp(inp){const r=new FileReader();r.onload=async()=>{let o;try{o=JSON.parse(r.result)}catch{return note('This is not a valid backup file.')}let add=0,upd=0;const todo=[];
  ['payors','payees','forms','atcs'].forEach(k=>(o[k]||[]).forEach(x=>{const e=db[k].find(y=>y.id===x.id);if(!e){add++;todo.push([k,x])}else if((x.updated||0)>(e.updated||0)){upd++;todo.push([k,x])}}));
  if(!await ask(`Import ${add} new and ${upd} updated records? A safety copy of your current data will be kept.`))return;
- localStorage.setItem('ewt_backup',JSON.stringify(db));todo.forEach(([k,x])=>{const i=db[k].findIndex(y=>y.id===x.id);i<0?db[k].push(x):db[k][i]=x});save();F=null;note('Import complete.');go('data')};r.readAsText(inp.files[0])}
+ localStorage.setItem('ewt_backup',JSON.stringify(db));todo.forEach(([k,x])=>{const i=db[k].findIndex(y=>y.id===x.id);i<0?db[k].push(x):db[k][i]=x});fixMerged();save();F=null;note('Import complete.');go('data')};r.readAsText(inp.files[0])}
 async function undoImp(){const b=localStorage.getItem('ewt_backup');if(!b)return note('No safety copy found.');if(await ask('Restore the data from before the last import?')){db=JSON.parse(b);save();go('data')}}
 function addAtc(){const c=$('#a_c').value.trim().toUpperCase(),d=$('#a_d').value.trim(),r=parseFloat($('#a_r').value);if(!c||!d||isNaN(r))return note('Enter the code, description and rate.');db.atcs.push({id:uid(),code:c,desc:d,rate:r,updated:Date.now()});save();go('data')}
 function vData(){main.innerHTML=`<h2>Backup &amp; ATC</h2><div class="box"><h3 style="margin-top:0">Cloud sync (optional)</h3><p class="muted">Keeps your devices on the same data. Your records are encrypted on this device before they are uploaded. Export / Import below still works as before.</p>
@@ -346,6 +347,33 @@ function parsePdfPage(it,name){const lab=it.filter(i=>i.h<9),L=(re,k)=>lab.filte
  return{name,from:dt(ds.slice(0,8)),to:dt(ds.slice(8,16)),payee,payor,foreign:join(band(fo,p2)),lines,money}}
 /*PDFEND*/
 
+/*MERGE*/
+const mcount=id=>({pe:live(db.payees).filter(x=>x.payorId===id).length,fo:live(db.forms).filter(x=>x.payorId===id).length});
+function dupGroups(){const m={};live(db.payors).forEach(p=>{const n=ntin(p.tin);if(n.length>=9)(m[n]=m[n]||[]).push(p)});return Object.values(m).filter(g=>g.length>1)}
+function mergePayors(kid,sid){const K=by('payors',kid),S=by('payors',sid),now=Date.now(),r={moved:0,joined:0,forms:db.forms.filter(f=>!f.deleted&&f.payorId===sid).length};
+ ['nick','name','addr','zip','sigName','sigTitle','sigTin'].forEach(f=>{if(!K[f]&&S[f])K[f]=S[f]});K.updated=now;
+ live(db.payees).filter(p=>p.payorId===sid).forEach(p=>{const t=live(db.payees).find(x=>x.payorId===kid&&ntin(x.tin)===ntin(p.tin));
+  if(t){['name','addr','zip'].forEach(f=>{if(!t[f]&&p[f])t[f]=p[f]});t.updated=now;db.forms.forEach(f=>{if(f.payeeId===p.id){f.payeeId=t.id;f.updated=now}});p.deleted=true;p.mergedInto=t.id;p.updated=now;r.joined++}
+  else{p.payorId=kid;p.updated=now;r.moved++}});
+ db.forms.forEach(f=>{if(f.payorId===sid){f.payorId=kid;f.updated=now}});
+ S.deleted=true;S.mergedInto=kid;S.updated=now;if(F&&F.payorId===sid)F.payorId=kid;if(RP.payor===sid)RP.payor=kid;save();return r}
+function fixMerged(){const now=Date.now();let ch=0;const root=(k,id)=>{let r=by(k,id),n=0;while(r&&r.deleted&&r.mergedInto&&n++<10)r=by(k,r.mergedInto);return r&&!r.deleted?r:null};
+ db.payees.forEach(p=>{if(p.deleted)return;const r=root('payors',p.payorId);if(r&&r.id!==p.payorId){p.payorId=r.id;p.updated=now;ch++}});
+ db.forms.forEach(f=>{if(f.deleted)return;let c=false;const rp=root('payors',f.payorId),re=root('payees',f.payeeId);if(rp&&rp.id!==f.payorId){f.payorId=rp.id;c=true}if(re&&re.id!==f.payeeId){f.payeeId=re.id;c=true}if(c){f.updated=now;ch++}});return ch}
+function dupBox(){const g=dupGroups();if(!g.length)return '';
+ return `<div class="box" style="border-top-color:#a22"><h3 style="margin-top:0">Possible duplicate payors</h3><p class="muted">These payors have exactly the same TIN (branch code included). Choose the one to keep. The others are merged into it, with their payees and certificates. Nothing is merged until you confirm.</p>`+
+ g.map(grp=>`<div style="margin-bottom:10px"><b>TIN ${esc(ftin(grp[0].tin))}</b><table class="t" style="margin-top:4px">${grp.map(p=>{const c=mcount(p.id);return `<tr><td>${esc(pl(p))}</td><td class="muted">${c.pe} payee(s), ${c.fo} certificate(s)</td><td class="r"><a class="l" onclick="mergeGroup('${p.id}')">Keep this one</a></td></tr>`}).join('')}</table></div>`).join('')+'</div>'}
+async function mergeGroup(kid){const K=by('payors',kid),g=dupGroups().find(x=>x.some(p=>p.id===kid));if(!g)return;const others=g.filter(p=>p.id!==kid);
+ if(!await ask(`Keep "${pl(K)}" and merge ${others.map(p=>'"'+pl(p)+'"').join(', ')} into it? Their payees and certificates move to "${pl(K)}".`))return;
+ let a=0,b=0,c=0;others.forEach(o=>{const r=mergePayors(kid,o.id);a+=r.moved;b+=r.joined;c+=r.forms});vEnt('payors');note(`Merged. ${c} certificate(s) moved, ${a} payee(s) moved and ${b} duplicate payee(s) combined.`)}
+function mergeUI(sid){const S=by('payors',sid),o=live(db.payors).filter(p=>p.id!==sid).sort((a,b)=>(ntin(b.tin)===ntin(S.tin))-(ntin(a.tin)===ntin(S.tin)));if(!o.length)return note('There is no other payor to merge with.');
+ $('#xri').innerHTML=`<h2>Merge payor</h2><div class="box"><p><b>${esc(pl(S))}</b> (TIN ${esc(ftin(S.tin))}) will be merged into the payor you choose. Its payees and certificates move there, and this record is removed.</p><label>Merge into</label><select id="mg_to">${o.map(p=>`<option value="${p.id}">${esc(pl(p))} · ${esc(ftin(p.tin))}${ntin(p.tin)===ntin(S.tin)?' (same TIN)':''}</option>`).join('')}</select><button class="b" onclick="doMerge('${sid}')">Merge</button><button class="x" onclick="$('#xr').style.display='none'">Cancel</button></div>`;$('#xr').style.display='block'}
+async function doMerge(sid){const kid=$('#mg_to').value,S=by('payors',sid),K=by('payors',kid);
+ if(ntin(S.tin)!==ntin(K.tin)&&!await ask(`These payors have DIFFERENT TINs (${ftin(S.tin)} and ${ftin(K.tin)}). They may be different businesses or branches. Merge anyway?`))return;
+ const c=mcount(sid);if(!await ask(`Merge "${pl(S)}" into "${pl(K)}"? ${c.pe} payee(s) and ${c.fo} certificate(s) will move. This cannot be undone here (Undo last import can restore it right after a sync or import).`))return;
+ const r=mergePayors(kid,sid);$('#xr').style.display='none';vEnt('payors');note(`Merged. ${r.forms} certificate(s) moved, ${r.moved} payee(s) moved and ${r.joined} duplicate payee(s) combined.`)}
+/*MERGEEND*/
+
 /*SYNC*/
 const getSync=()=>{try{return JSON.parse(localStorage.getItem('ewt_sync')||'{}')}catch(e){return{}}},putSync=o=>localStorage.setItem('ewt_sync',JSON.stringify(o));
 let SYMSG='',SYBUSY=false;const setSt=m=>{SYMSG=m;const e=$('#sst');if(e)e.textContent=m};
@@ -368,7 +396,7 @@ async function syncNow(full){if(SYBUSY)return;const s=saveSyncUI();if(!s.apiKey|
   let nNew=0,nUpd=0;const pulled=new Set(),ap=[];
   for(const x of q){const d=x.document;if(!d)continue;const f=d.fields||{},k=f.k&&f.k.stringValue,c=f.c&&f.c.stringValue;if(!k||!c||!db[k])continue;let r;try{r=await decJ(key,c)}catch(e){throw new Error('Could not decrypt a record. The passphrase differs from the one used on another device.')}
    const i=db[k].findIndex(y=>y.id===r.id);if(i<0){ap.push([k,r]);nNew++;pulled.add(k+r.id)}else if((r.updated||0)>(db[k][i].updated||0)){ap.push([k,r]);nUpd++;pulled.add(k+r.id)}}
-  if(ap.length){localStorage.setItem('ewt_backup',JSON.stringify(db));ap.forEach(([k,r])=>{const i=db[k].findIndex(y=>y.id===r.id);i<0?db[k].push(r):db[k][i]=r});save()}
+  if(ap.length){localStorage.setItem('ewt_backup',JSON.stringify(db));ap.forEach(([k,r])=>{const i=db[k].findIndex(y=>y.id===r.id);i<0?db[k].push(r):db[k][i]=r});fixMerged();save()}
   const W=[],mk=async(id,k,u,obj)=>({update:{name:`projects/${s.projectId}/databases/(default)/documents/ledger/${id}`,fields:{k:{stringValue:k},u:{integerValue:String(u)},c:{stringValue:await encJ(key,obj)}}}});
   for(const k of ['payors','payees','forms','atcs'])for(const r of db[k]){if(pulled.has(k+r.id))continue;if(!full&&!((r.updated||0)>(+s.last||0)))continue;W.push(await mk(k+'_'+r.id,k,r.updated||0,r))}
   if(!metaOk)W.push(await mk('_meta','meta',0,{ok:'2307-LEDGER'}));
