@@ -114,10 +114,12 @@ async function saveEnt(k){const o=E.d?.id?E.d:{id:uid()};SPEC[k].forEach(([f])=>
  o.updated=Date.now();if(!db[k].includes(o)&&!by(k,o.id))db[k].push(o);save();E={fp:E.fp};vEnt(k)}
 async function delEnt(k,id){if(!await ask('Delete this record?'))return;const o=by(k,id);o.deleted=true;o.updated=Date.now();save();vEnt(k)}
 /* ---------- Certificates ---------- */
-let F=null;const blank=()=>({id:uid(),payorId:live(db.payors)[0]?.id||'',payeeId:'',from:'',to:'',foreign:'',lines:[{atc:'',gross:'',date:''}]});
+let F=null,EDID=null;const isEd=()=>!!(F&&EDID&&F.id===EDID),dirty=()=>!!(F&&!isEd()&&F.lines.some(l=>l.atc||l.gross)),fresh=()=>{const b=blank();if(F){b.payorId=F.payorId;b.from=F.from;b.to=F.to}b.lines=[{atc:'',gross:'',date:b.from}];return b};
+async function openForm(id){if(dirty()&&!await ask('You have an unsaved new certificate. Discard it and open the saved one?'))return;F=JSON.parse(JSON.stringify(by('forms',id)));EDID=id;go('forms')}
+const blank=()=>({id:uid(),payorId:live(db.payors)[0]?.id||'',payeeId:'',from:'',to:'',foreign:'',lines:[{atc:'',gross:'',date:''}]});
 function vForms(){F=F||blank();if(!live(db.payors).some(x=>x.id===F.payorId))F.payorId=live(db.payors)[0]?.id||'';const pe=live(db.payees).filter(x=>x.payorId===F.payorId);if(!pe.find(x=>x.id===F.payeeId))F.payeeId=pe[0]?.id||'';
  const hist=live(db.forms).sort((a,b)=>b.updated-a.updated);
- main.innerHTML=`<h2>Certificate of Creditable Tax Withheld (2307)</h2><div class="box"><div class="g">
+ main.innerHTML=`<h2>Certificate of Creditable Tax Withheld (2307)</h2>${isEd()?`<div class="box" style="border-top-color:#a22;background:#fbf1f1"><b>Editing saved certificate:</b> ${esc(by('payees',F.payeeId)?.name)}, ${mdy(F.from)} - ${mdy(F.to)}<div class="muted">Changes replace the saved certificate. Use &quot;Save as a new copy&quot; to keep the old one.</div></div>`:`<div class="muted" style="margin-bottom:8px"><b>New certificate</b></div>`}<div class="box"><div class="g">
  <div><label>Payor</label><select onchange="F.payorId=this.value;vForms()">${live(db.payors).map(p=>`<option value="${p.id}" ${p.id===F.payorId?'selected':''}>${esc(pl(p))}</option>`).join('')}</select></div>
  <div><label>Payee</label><select onchange="F.payeeId=this.value;vForms()">${pe.map(p=>`<option value="${p.id}" ${p.id===F.payeeId?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
  <div><label>Period from</label><input type="date" value="${F.from}" onchange="F.from=this.value;if(!F.to||F.to<F.from)F.to=eom(F.from);F.lines.forEach(l=>l.date=l.date||F.from);vForms()"></div>
@@ -129,15 +131,16 @@ function vForms(){F=F||blank();if(!live(db.payors).some(x=>x.id===F.payorId))F.p
  <td class="r" id="n${i}"></td><td class="r" id="r${i}"></td><td class="r" id="t${i}"></td><td><a class="l" onclick="F.lines.splice(${i},1);vForms()">Remove</a></td></tr>`).join('')}
  <tfoot><tr><td colspan=6 class="r">Total tax withheld</td><td class="r" id="tt"></td><td></td></tr></tfoot></table>
  <button class="x" onclick="F.lines.push({atc:'',gross:'',date:F.from});vForms()">Add line</button>
- <button class="b" onclick="saveForm(false)">Save</button><button onclick="saveForm(true)">Save &amp; preview / print</button><button class="x" onclick="F=null;vForms()">New certificate</button>
+ ${isEd()?`<button class="b" onclick="saveForm(false)">Save changes</button><button onclick="saveForm(false,true)">Save as a new copy</button><button onclick="saveForm(true)">Save changes &amp; preview / print</button><button class="x" onclick="newCert()">Cancel (start a new certificate)</button>`:`<button class="b" onclick="saveForm(false)">Save</button><button onclick="saveForm(true)">Save &amp; preview / print</button><button class="x" onclick="newCert()">Clear form</button>`}
  <h3>Saved certificates</h3><table class="t"><tr><th>Payee</th><th>Payor</th><th>Period</th><th class="r">Tax withheld</th><th></th></tr>${hist.map(f=>`<tr><td>${esc(by('payees',f.payeeId)?.name)}</td><td>${esc(pl(by('payors',f.payorId)))}</td><td>${mdy(f.from)} - ${mdy(f.to)}</td>
- <td class="r">${fm(f.lines.reduce((s,l)=>s+calc(l,by('payees',f.payeeId)).tax,0))}</td><td class="r"><a class="l" onclick="F=JSON.parse(JSON.stringify(by('forms','${f.id}')));vForms()">Open</a><a class="l" onclick="showSheet('${f.id}')">Print</a><a class="l" onclick="delForm('${f.id}')">Delete</a></td></tr>`).join('')||'<tr><td colspan=5 class="muted">No certificates yet.</td></tr>'}</table>`;calcAll()}
+ <td class="r">${fm(f.lines.reduce((s,l)=>s+calc(l,by('payees',f.payeeId)).tax,0))}</td><td class="r"><a class="l" onclick="openForm('${f.id}')">Open</a><a class="l" onclick="showSheet('${f.id}')">Print</a><a class="l" onclick="delForm('${f.id}')">Delete</a></td></tr>`).join('')||'<tr><td colspan=5 class="muted">No certificates yet.</td></tr>'}</table>`;calcAll()}
 function L(i,k,v){F.lines[i][k]=v;if(k==='gross'||k==='atc')delete F.lines[i].tax;calcAll()}
 function calcAll(){const pe=by('payees',F.payeeId);let tt=0;F.lines.forEach((l,i)=>{const c=calc(l,pe);tt+=c.tax;$('#d'+i).textContent=c.a?c.a.desc:(l.atc?'Unknown ATC':'');$('#n'+i).textContent=fm(c.net);$('#r'+i).textContent=c.a?c.a.rate+'%':'';$('#t'+i).textContent=fm(c.tax)});$('#tt').textContent=fm(tt)}
-function saveForm(pv){const pe=by('payees',F.payeeId),pr=by('payors',F.payorId);if(!pr||!pe)return note('Select a payor and a payee first.');if(!F.from||!F.to)return note('Enter the period.');
+async function saveForm(pv,asNew){const pe=by('payees',F.payeeId),pr=by('payors',F.payorId);if(!pr||!pe)return note('Select a payor and a payee first.');if(!F.from||!F.to)return note('Enter the period.');
  const ls=F.lines.filter(l=>l.atc||l.gross);if(!ls.length)return note('Add at least one line.');if(ls.some(l=>!calc(l,pe).a))return note('One or more ATC codes are not in the list.');if(new Set(ls.map(l=>l.atc.trim().toUpperCase())).size>5)return note('One certificate can show up to 5 different ATCs. Put the rest on a second certificate.');
- ls.forEach(l=>l.date=l.date||F.from);F.lines=ls;F.updated=Date.now();const i=db.forms.findIndex(x=>x.id===F.id);if(i<0)db.forms.push(F);else db.forms[i]=F;save();pv?showSheet(F.id):vForms()}
-async function delForm(id){if(!await ask('Delete this certificate?'))return;const f=by('forms',id);f.deleted=true;f.updated=Date.now();save();F=null;vForms()}
+ if(asNew)F.id=uid();ls.forEach(l=>l.date=l.date||F.from);F.lines=ls;F.updated=Date.now();const i=db.forms.findIndex(x=>x.id===F.id);if(i<0)db.forms.push(F);else db.forms[i]=F;save();const sid=F.id,was=isEd()&&!asNew;F=fresh();EDID=null;vForms();if(pv)showSheet(sid);else note(was?'Changes saved.':'Certificate saved. The form is clear for the next one (payor and period kept).')}
+function newCert(){F=fresh();EDID=null;vForms()}
+async function delForm(id){if(!await ask('Delete this certificate?'))return;const f=by('forms',id);f.deleted=true;f.updated=Date.now();save();if(F&&F.id===id){F=fresh();EDID=null}vForms()}
 /* ---------- Printed form ---------- */
 const DF=[157.35,170.85,184.45,198,209.95,223.4,237,250.65],DT=DF.map(x=>x+247.6),TC=[212.55,225.85,239.15,264.05,277.35,290.65,315.7,329.1,342.4,367.85,382.95,398.5,413.9,428.65],ZC=[547,560.35,573.6,586.9],CX=[[176.5,219.7],[219.7,291.8],[291.8,366],[366,438.1],[438.1,510.1],[510.1,594]];
 function sheet(f){const pr=by('payors',f.payorId)||{},pe=by('payees',f.payeeId)||{},ag={},o=[];
@@ -209,7 +212,7 @@ function certHtml(){const rows=[];live(db.forms).filter(f=>f.payorId===RP.payor&
   return `<tr><td>${esc(pe.name||'?')}<div class="muted">${esc(pe.tin||'')}</div></td><td>${mdy(f.from)} - ${mdy(f.to)}</td><td>${cs.map(x=>`${esc(x.l.atc)} · ${x.l.date.slice(0,7)} · ${fm(x.c.net)}`).join('<br>')}${out?`<div class="muted">+${out} line(s) outside this period, not counted</div>`:''}</td><td class="r">${fm(tx)}</td>
   <td class="r"><a class="l" onclick="showSheet('${f.id}')">View</a><a class="l" onclick="editF('${f.id}')">Edit</a><a class="l" onclick="delFormR('${f.id}')">Delete</a></td></tr>`}).join('')+`<tfoot><tr><td colspan=3>${rows.length} certificate${rows.length===1?'':'s'}</td><td class="r">${fm(R2(tt))}</td><td></td></tr></tfoot></table>`}
 function repRefresh(){const r=$('#rep'),c=$('#cert'),h=$('#chip');if(r)r.innerHTML=repHtml();if(c)c.innerHTML=certHtml();if(h)h.innerHTML=chipHtml()}
-function editF(id){F=JSON.parse(JSON.stringify(by('forms',id)));go('forms')}
+async function editF(id){await openForm(id)}
 async function delFormR(id){if(!await ask('Delete this certificate? It will no longer be counted in the report.'))return;const f=by('forms',id);f.deleted=true;f.updated=Date.now();save();if(F&&F.id===id)F=null;repRefresh()}
 function csv(){const{P}=repData();dl('report.csv','Payee,TIN,Net income payments,Tax withheld\n'+P.map(x=>[`"${x.name}"`,x.tin,x.net.toFixed(2),R2(x.tax).toFixed(2)].join(',')).join('\n'),'text/csv')}
 /* ---------- Backup, merge, custom ATC ---------- */

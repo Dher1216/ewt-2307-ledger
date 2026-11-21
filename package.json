@@ -11,7 +11,7 @@
   "build": {
     "appId": "ph.local.ledger2307",
     "productName": "2307 Ledger",
-    "files": ["main.js", "src/**/*"],
+    "files": ["main.js", "preload.js", "src/**/*"],
     "win": { "target": "nsis" }
   },
   "devDependencies": {

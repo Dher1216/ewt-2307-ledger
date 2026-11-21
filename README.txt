@@ -6,7 +6,7 @@ WINDOWS APP (laptop)
 3. npm install   then   npm start     (installer: npm run dist)
 
 PHONE APP (Android + iPhone) - the "docs" folder
-Upload this whole project to a PUBLIC GitHub repository, then:
+Upload this whole project (including docs/lib - needed for PDF import) to a PUBLIC GitHub repository, then:
 Settings > Pages > Deploy from a branch > main > /docs > Save.
 Open https://YOURUSERNAME.github.io/REPOSITORYNAME/ on the phone and add it to the Home Screen.
 When you change docs/index.html later, also change the number in docs/sw.js (v1 -> v2) so phones update.
